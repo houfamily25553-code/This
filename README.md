@@ -1,6 +1,6 @@
 # Homework Quest — ระบบจัดการและแจ้งเตือนการบ้านผ่าน LINE OA
 
-Next.js (App Router) + TypeScript + Tailwind CSS · Firebase Firestore/Storage (Admin SDK ฝั่งเซิร์ฟเวอร์เท่านั้น) · LINE Messaging API / LINE Login / LIFF · Claude API · Vercel + Vercel Cron
+Next.js (App Router) + TypeScript + Tailwind CSS · Firebase Firestore/Storage (Admin SDK ฝั่งเซิร์ฟเวอร์เท่านั้น) · LINE Messaging API / LINE Login / LIFF · Google Gemini API · Vercel + Vercel Cron
 
 - หัวหน้าห้องลงทะเบียน → ได้รหัสห้อง → เพื่อนกรอกรหัสเข้าห้อง
 - หัวหน้าห้องสร้างการบ้าน ระบบสุ่มแต้ม (10–100) ครั้งเดียวที่เซิร์ฟเวอร์ ทุกคนที่ส่งได้แต้มเท่ากัน
@@ -68,7 +68,7 @@ Next.js (App Router) + TypeScript + Tailwind CSS · Firebase Firestore/Storage (
             ├── room-code.ts · rooms.ts     รหัสห้อง, สมาชิก, ข้อความชวนเพื่อน
             ├── tasks.ts · task-input.ts    ดึงงาน, ตรวจข้อมูลฟอร์ม
             ├── storage.ts       อัปโหลด/ลบรูป
-            ├── ai.ts            เรียก Claude (ติวเตอร์ + หัวข้อแจ้งเตือน)
+            ├── ai.ts            เรียก Gemini (ติวเตอร์ + หัวข้อแจ้งเตือน)
             └── chat-quota.ts    จำกัดคำถาม AI ต่อคนต่อวัน
 ```
 
@@ -130,7 +130,7 @@ Next.js (App Router) + TypeScript + Tailwind CSS · Firebase Firestore/Storage (
 1. Push โค้ดขึ้น GitHub → <https://vercel.com/new> → Import repository
 2. ใส่ Environment Variables ทุกตัวตาม `.env.example`
    - `CRON_SECRET`: สุ่มด้วย `openssl rand -hex 32`
-   - `ANTHROPIC_API_KEY`: สร้างที่ <https://platform.claude.com>
+   - `GEMINI_API_KEY`: สร้างฟรีที่ <https://aistudio.google.com/apikey> (ไม่ต้องผูกบัตร)
    - `NEXT_PUBLIC_APP_URL`: ใส่โดเมนที่ Vercel ให้ (ถ้ายังไม่รู้ ให้ deploy ครั้งแรกก่อน แล้วกลับมาใส่และ Redeploy)
 3. Deploy แล้วนำ URL ไปใส่ใน LIFF Endpoint URL และ Callback URL (ข้อ 3.2)
 4. แท็บ Settings → Cron Jobs ตรวจว่ามี `/api/cron/notify`
@@ -210,4 +210,4 @@ npm run typecheck
 - **รองรับโรงเรียนเดียว**: `room_id` มาจากระดับชั้น+ห้อง (เช่น `m4-1`) และรองรับ ม.1–ม.6
 - **หัวหน้าห้อง** ส่งงานและสะสมแต้มได้เหมือนนักเรียน และออกจากห้องได้เฉพาะตอนห้องยังไม่มีสมาชิกอื่นและไม่มีการบ้าน
 - **ส่งงานหลังเลยกำหนด** ยังกดได้และได้แต้มตามปกติ
-- **ค่าใช้จ่าย AI**: ค่าเริ่มต้นใช้ `claude-opus-5-5` เปลี่ยนเป็น `claude-haiku-5-5` ได้ที่ `ANTHROPIC_MODEL` ถ้าต้องการประหยัด และปิดการแต่งหัวข้อแจ้งเตือนด้วย `AI_NOTIFY_ENABLED=false`
+- **AI ฟรีแต่มีโควตา**: Gemini free tier มีโควตาต่อวันรวมทั้งโปรเจกต์ (ไม่ใช่ต่อคน) ถ้าเต็ม AI จะตอบว่าลองใหม่ภายหลัง ตรวจโควตาจริงและชื่อโมเดลที่ใช้ได้ที่ Google AI Studio แล้วตั้ง `GEMINI_MODEL` ให้ตรง ปิดการแต่งหัวข้อแจ้งเตือนด้วย `AI_NOTIFY_ENABLED=false` เพื่อประหยัดโควตา

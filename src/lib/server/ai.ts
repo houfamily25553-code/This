@@ -1,46 +1,77 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { formatBangkok } from "@/lib/time";
 import type { ChatMessageDto } from "@/lib/types";
 import type { TaskDoc } from "./docs";
 import { requireEnv } from "./env";
 import { ApiError } from "./http";
 
-const DEFAULT_MODEL = "claude-opus-5-5";
+// Gemini API (Google AI Studio) — มี free tier ใช้ได้โดยไม่ต้องผูกบัตร
+// ชื่อโมเดลเปลี่ยนบ่อย จึงตั้งผ่าน GEMINI_MODEL ได้ (ค่าเริ่มต้นเป็น alias ของรุ่น Flash ล่าสุด)
+const DEFAULT_MODEL = "gemini-flash-latest";
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
-function model(): string {
-  return process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+interface GeminiPart {
+  text?: string;
+  thought?: boolean;
 }
 
-let cached_client: Anthropic | null = null;
-function client(): Anthropic {
-  cached_client ??= new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
-  return cached_client;
+interface GeminiResponse {
+  candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[];
+  promptFeedback?: { blockReason?: string };
 }
 
-/**
- * พารามิเตอร์ที่ใช้ร่วมกันทุกคำขอ
- * - effort "low": งานติว/แต่งข้อความสั้น ไม่ต้องคิดลึก ช่วยคุมค่าใช้จ่าย
- * - fallbacks: ถ้าโมเดลหลักปฏิเสธด้วยตัวกรองความปลอดภัย ให้ API ลองโมเดลสำรองให้เอง
- *   (เปิดเฉพาะโมเดลเริ่มต้น เพราะบางโมเดลไม่รองรับพารามิเตอร์นี้)
- */
-function baseParams() {
-  const selected = model();
-  return {
-    model: selected,
-    output_config: { effort: "low" as const },
-    ...(selected === DEFAULT_MODEL
-      ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
-      : {}),
-  };
+interface GeminiRequest {
+  system: string;
+  messages: ChatMessageDto[];
+  max_output_tokens: number;
+  timeout_ms: number;
 }
 
-function textOf(message: Anthropic.Beta.BetaMessage): string {
-  return message.content
-    .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === "text")
-    .map((block) => block.text)
+type GeminiResult = { kind: "text"; text: string } | { kind: "blocked" };
+
+/** เรียก generateContent ผ่าน REST (ไม่ต้องพึ่ง SDK) และแปลงข้อผิดพลาดเป็น ApiError ที่หน้าเว็บแสดงได้ */
+async function generate(req: GeminiRequest): Promise<GeminiResult> {
+  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  let res: Response;
+  try {
+    res = await fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": requireEnv("GEMINI_API_KEY") },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: req.system }] },
+        contents: req.messages.map((m) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }],
+        })),
+        generationConfig: { maxOutputTokens: req.max_output_tokens, temperature: 0.7 },
+      }),
+      signal: AbortSignal.timeout(req.timeout_ms),
+      cache: "no-store",
+    });
+  } catch (err) {
+    console.error("[ai] gemini request failed", err);
+    throw new ApiError(502, "ai_error", "AI ผู้ช่วยตอบช้าหรือขัดข้องชั่วคราว ลองใหม่อีกครั้ง");
+  }
+
+  if (res.status === 429) {
+    // โควตา free tier เป็นของทั้งโปรเจกต์ ถ้าเต็มทุกคนจะถามไม่ได้จนกว่าจะรีเซ็ต
+    throw new ApiError(503, "ai_busy", "ตอนนี้ AI ถูกใช้เยอะ ลองใหม่อีกสักครู่นะ");
+  }
+  if (!res.ok) {
+    console.error(`[ai] gemini error ${res.status}`, (await res.text()).slice(0, 500));
+    throw new ApiError(502, "ai_error", "AI ผู้ช่วยขัดข้องชั่วคราว ลองใหม่อีกครั้ง");
+  }
+
+  const data = (await res.json()) as GeminiResponse;
+  const candidate = data.candidates?.[0];
+  if (data.promptFeedback?.blockReason || !candidate) return { kind: "blocked" };
+  const text = (candidate.content?.parts ?? [])
+    .filter((part) => !part.thought && typeof part.text === "string")
+    .map((part) => part.text)
     .join("")
     .trim();
+  if (!text) return candidate.finishReason === "SAFETY" ? { kind: "blocked" } : { kind: "text", text: "" };
+  return { kind: "text", text };
 }
 
 function tutorSystemPrompt(task: TaskDoc): string {
@@ -61,33 +92,17 @@ function tutorSystemPrompt(task: TaskDoc): string {
 
 /** คำตอบของ AI ผู้ช่วยสำหรับการบ้านหนึ่งชิ้น */
 export async function tutorReply(task: TaskDoc, messages: ChatMessageDto[]): Promise<string> {
-  try {
-    const response = await client().beta.messages.create(
-      {
-        ...baseParams(),
-        max_tokens: 4000,
-        system: tutorSystemPrompt(task),
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      },
-      { timeout: 50_000 },
-    );
-    if (response.stop_reason === "refusal") {
-      return "ขอโทษนะ พี่ติวช่วยเรื่องนี้ไม่ได้ ลองถามเกี่ยวกับเนื้อหาการบ้านอีกแบบดูนะ";
-    }
-    const text = textOf(response);
-    if (!text) throw new ApiError(502, "ai_empty", "AI ไม่ได้ตอบกลับ ลองถามใหม่อีกครั้ง");
-    return text;
-  } catch (err) {
-    if (err instanceof ApiError) throw err;
-    if (err instanceof Anthropic.RateLimitError) {
-      throw new ApiError(503, "ai_busy", "ตอนนี้มีคนใช้ AI เยอะ ลองใหม่อีกสักครู่นะ");
-    }
-    if (err instanceof Anthropic.APIError) {
-      console.error(`[ai] API error ${err.status}`, err.message);
-      throw new ApiError(502, "ai_error", "AI ผู้ช่วยขัดข้องชั่วคราว ลองใหม่อีกครั้ง");
-    }
-    throw err;
+  const result = await generate({
+    system: tutorSystemPrompt(task),
+    messages,
+    max_output_tokens: 2048, // รวมโทเคนที่โมเดลใช้คิดด้วย จึงเผื่อไว้มากกว่าความยาวคำตอบ
+    timeout_ms: 50_000,
+  });
+  if (result.kind === "blocked") {
+    return "ขอโทษนะ พี่ติวช่วยเรื่องนี้ไม่ได้ ลองถามเกี่ยวกับเนื้อหาการบ้านอีกแบบดูนะ";
   }
+  if (!result.text) throw new ApiError(502, "ai_empty", "AI ไม่ได้ตอบกลับ ลองถามใหม่อีกครั้ง");
+  return result.text;
 }
 
 export const DEFAULT_REMINDER_HEADLINE = "⏰ ภารกิจใกล้หมดเวลาแล้ว!";
@@ -97,25 +112,17 @@ export const DEFAULT_REMINDER_HEADLINE = "⏰ ภารกิจใกล้ห�
  * ถ้าปิดอยู่ ช้า หรือผิดพลาด จะใช้ข้อความมาตรฐาน การแจ้งเตือนต้องไม่พังเพราะ AI
  */
 export async function reminderHeadline(tasks: TaskDoc[]): Promise<string> {
-  if (process.env.AI_NOTIFY_ENABLED !== "true" || !process.env.ANTHROPIC_API_KEY) return DEFAULT_REMINDER_HEADLINE;
+  if (process.env.AI_NOTIFY_ENABLED !== "true" || !process.env.GEMINI_API_KEY) return DEFAULT_REMINDER_HEADLINE;
   try {
-    const response = await client().beta.messages.create(
-      {
-        ...baseParams(),
-        max_tokens: 1000,
-        system:
-          "คุณแต่งหัวข้อแจ้งเตือนการบ้านสำหรับนักเรียนมัธยมไทยในสไตล์เกม RPG ให้รู้สึกสนุกและอยากรีบทำ ตอบเป็นหัวข้อภาษาไทยบรรทัดเดียว ยาวไม่เกิน 35 ตัวอักษร มีอีโมจิได้ 1 ตัว ไม่ต้องมีเครื่องหมายคำพูดหรือคำอธิบายอื่น",
-        messages: [
-          {
-            role: "user",
-            content: `การบ้านที่ใกล้ถึงกำหนด: ${tasks.map((t) => t.subject).join(", ")}`,
-          },
-        ],
-      },
-      { timeout: 10_000, maxRetries: 0 },
-    );
-    if (response.stop_reason === "refusal") return DEFAULT_REMINDER_HEADLINE;
-    const line = textOf(response).split("\n")[0]?.replace(/^["“”']+|["“”']+$/g, "").trim() ?? "";
+    const result = await generate({
+      system:
+        "คุณแต่งหัวข้อแจ้งเตือนการบ้านสำหรับนักเรียนมัธยมไทยในสไตล์เกม RPG ให้รู้สึกสนุกและอยากรีบทำ ตอบเป็นหัวข้อภาษาไทยบรรทัดเดียว ยาวไม่เกิน 35 ตัวอักษร มีอีโมจิได้ 1 ตัว ไม่ต้องมีเครื่องหมายคำพูดหรือคำอธิบายอื่น",
+      messages: [{ role: "user", content: `การบ้านที่ใกล้ถึงกำหนด: ${tasks.map((t) => t.subject).join(", ")}` }],
+      max_output_tokens: 512,
+      timeout_ms: 10_000,
+    });
+    if (result.kind !== "text") return DEFAULT_REMINDER_HEADLINE;
+    const line = result.text.split("\n")[0]?.replace(/^["“”']+|["“”']+$/g, "").trim() ?? "";
     return line ? line.slice(0, 60) : DEFAULT_REMINDER_HEADLINE;
   } catch (err) {
     console.error("[ai] reminder headline failed", err);

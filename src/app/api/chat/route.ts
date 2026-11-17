@@ -30,7 +30,7 @@ function parseMessages(raw: unknown): ChatMessageDto[] {
   return messages.slice(-MAX_HISTORY);
 }
 
-/** POST /api/chat — AI ผู้ช่วยของการบ้านหนึ่งชิ้น (ตอบเป็น JSON, เรียก Claude ฝั่งเซิร์ฟเวอร์เท่านั้น) */
+/** POST /api/chat — AI ผู้ช่วยของการบ้านหนึ่งชิ้น (ตอบเป็น JSON, เรียก Gemini ฝั่งเซิร์ฟเวอร์เท่านั้น) */
 export const POST = route(async (req) => {
   const { user } = await requireMember(req);
   const body = await readJson(req);
