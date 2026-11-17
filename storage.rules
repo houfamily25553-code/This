@@ -1,0 +1,10 @@
+rules_version = '2';
+
+// อัปโหลดรูปผ่าน API เท่านั้น รูปถูกเปิดอ่านด้วย download token ใน URL
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
