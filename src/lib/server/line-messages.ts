@@ -148,3 +148,88 @@ export function pendingTasksMessage(room_name: string, tasks: TaskDoc[], now: Da
     },
   };
 }
+
+/** ส่งให้หัวหน้าห้องหลังลงทะเบียน: รหัสห้อง + ลิงก์ (ข้อความที่สองเป็น text ล้วน กดค้างแล้วก๊อปปี้ได้เลย) */
+export function roomRegisteredMessages(
+  room_name: string,
+  room_secret_code: string,
+  invite_text: string,
+): LineMessage[] {
+  return [
+    {
+      type: "flex",
+      altText: `ลงทะเบียนห้อง ${room_name} สำเร็จ รหัสห้อง ${room_secret_code}`,
+      contents: {
+        type: "bubble",
+        header: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: SKY,
+          contents: [
+            { type: "text", text: "👑 ลงทะเบียนสำเร็จ", color: "#FFFFFF", weight: "bold", size: "lg" },
+            { type: "text", text: `คุณคือหัวหน้าห้อง ${room_name}`, color: "#E0F2FE", size: "sm" },
+          ],
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          spacing: "md",
+          contents: [
+            { type: "text", text: "รหัสห้อง", size: "xs", color: MUTED },
+            { type: "text", text: room_secret_code, size: "3xl", weight: "bold", align: "center", color: SKY },
+            { type: "separator" },
+            {
+              type: "text",
+              text: "ก๊อปปี้ข้อความถัดไป (กดค้าง > คัดลอก) ไปวางในกลุ่ม LINE ห้องได้เลย",
+              wrap: true,
+              size: "sm",
+              color: MUTED,
+            },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            uriButton("เปิดหน้าจัดการการบ้าน", liffUrl("/admin")),
+            {
+              type: "button",
+              style: "secondary",
+              height: "sm",
+              action: { type: "clipboard", label: "คัดลอกข้อความชวนเพื่อน", clipboardText: invite_text.slice(0, 1000) },
+            },
+          ],
+        },
+      },
+    },
+    { type: "text", text: invite_text },
+  ];
+}
+
+/** แจ้งเตือนงานใกล้ถึงกำหนด (ข้อความเดียวรวมทุกงานที่คนกลุ่มนี้ยังไม่ส่ง) */
+export function reminderMessage(room_name: string, headline: string, tasks: TaskDoc[], now: Date = new Date()): LineMessage {
+  const rows: unknown[] = [];
+  tasks.slice(0, MAX_TASK_ROWS).forEach((task, i) => {
+    if (i > 0) rows.push({ type: "separator" });
+    rows.push(taskRow(task, now));
+  });
+  return {
+    type: "flex",
+    altText: `${headline} (${tasks.map((t) => t.subject).join(", ")})`.slice(0, 400),
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: RED,
+        contents: [
+          { type: "text", text: headline, color: "#FFFFFF", weight: "bold", wrap: true },
+          { type: "text", text: `ห้อง ${room_name} · ยังไม่ส่ง ${tasks.length} งาน`, color: "#FEE2E2", size: "xs" },
+        ],
+      },
+      body: { type: "box", layout: "vertical", spacing: "md", contents: rows },
+      footer: { type: "box", layout: "vertical", contents: [uriButton("ไปทำภารกิจ", liffUrl("/student"))] },
+    },
+  };
+}

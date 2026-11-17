@@ -2,7 +2,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { LineIdentity } from "@/lib/types";
 import { requireEnv } from "./env";
-import { unauthorized } from "./http";
+import { ApiError, unauthorized } from "./http";
 
 const LINE_API = "https://api.line.me";
 export const MULTICAST_LIMIT = 500;
@@ -81,12 +81,18 @@ interface VerifiedIdToken {
  * line_user_id มาจาก LINE เท่านั้น ไม่เชื่อค่าที่หน้าเว็บส่งมา
  */
 export async function verifyLineIdToken(id_token: string): Promise<LineIdentity> {
-  const res = await fetch(`${LINE_API}/oauth2/v2.1/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ id_token, client_id: requireEnv("LINE_LOGIN_CHANNEL_ID") }),
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${LINE_API}/oauth2/v2.1/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ id_token, client_id: requireEnv("LINE_LOGIN_CHANNEL_ID") }),
+      cache: "no-store",
+    });
+  } catch (err) {
+    console.error("[line] verify request failed", err);
+    throw new ApiError(503, "line_unreachable", "ติดต่อ LINE ไม่ได้ชั่วคราว กรุณาลองใหม่");
+  }
   if (!res.ok) throw unauthorized();
   const data = (await res.json()) as VerifiedIdToken;
   if (!data.sub) throw unauthorized();

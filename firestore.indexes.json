@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "Tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "notified", "order": "ASCENDING" },
+        { "fieldPath": "notify_at", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

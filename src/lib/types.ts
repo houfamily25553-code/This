@@ -65,3 +65,78 @@ export interface MeResponse {
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
+
+// ---------- รูปแบบคำตอบของแต่ละ API ----------
+
+export interface RoomAdminResponse {
+  room: RoomAdminDto;
+  join_url: string;
+  invite_text: string;
+}
+
+export interface RegisterResponse extends RoomAdminResponse {
+  push_sent: boolean;
+}
+
+export interface AdminTaskDto extends TaskDto {
+  submitted_count: number;
+}
+
+export interface AdminTasksResponse {
+  tasks: AdminTaskDto[];
+  member_count: number;
+}
+
+export interface MemberSubmissionDto {
+  line_user_id: string;
+  display_name: string;
+  picture_url: string;
+  role: Role;
+  submitted: boolean;
+  submitted_at: string | null;
+}
+
+export interface TaskSubmissionsResponse {
+  task_id: string;
+  members: MemberSubmissionDto[];
+}
+
+export interface StudentTaskDto extends TaskDto {
+  submitted: boolean;
+  submitted_at: string | null;
+}
+
+export interface StudentTasksResponse {
+  tasks: StudentTaskDto[];
+  total_points: number;
+}
+
+export interface SubmitResponse {
+  submission: SubmissionDto;
+  earned_points: number;
+  total_points: number;
+}
+
+export interface LeaderboardEntryDto {
+  rank: number;
+  line_user_id: string;
+  display_name: string;
+  picture_url: string;
+  total_points: number;
+  is_me: boolean;
+}
+
+export interface LeaderboardResponse {
+  room_name: string;
+  entries: LeaderboardEntryDto[];
+}
+
+export interface ChatMessageDto {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  remaining_today: number;
+}
