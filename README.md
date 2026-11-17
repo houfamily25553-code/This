@@ -2,7 +2,7 @@
 
 Next.js (App Router) + TypeScript + Tailwind CSS · Firebase Firestore/Storage (Admin SDK ฝั่งเซิร์ฟเวอร์เท่านั้น) · LINE Messaging API / LINE Login / LIFF · Vercel + Vercel Cron
 
-> สถานะ: ส่วนที่ 1 (โครงสร้าง, ไฟล์ตั้งค่า, โค้ดร่วม) เสร็จแล้ว — ไฟล์ที่มี ⏳ จะเพิ่มในส่วนถัดไป
+> สถานะ: ส่วนที่ 1 และ 4.1 เสร็จแล้ว — ไฟล์ที่มี ⏳ จะเพิ่มในส่วนถัดไป
 > คู่มือติดตั้งและ Checklist ทดสอบจะอยู่ในไฟล์นี้เมื่อครบทุกส่วน
 
 ## โครงสร้างโฟลเดอร์
@@ -14,8 +14,9 @@ Next.js (App Router) + TypeScript + Tailwind CSS · Firebase Firestore/Storage (
 ├── storage.rules                ปิด Storage จาก client ทั้งหมด
 ├── vercel.json                  Vercel Cron เรียก /api/cron/notify ทุกชั่วโมง
 ├── next.config.ts · postcss.config.mjs · tsconfig.json · package.json
+├── assets/rich-menu.png         รูป Rich Menu 2500x843
 ├── scripts/
-│   └── setup-rich-menu.mjs      ⏳ 4.1 สร้าง Rich Menu 3 ปุ่ม
+│   └── setup-rich-menu.mjs      สร้าง Rich Menu 3 ปุ่ม (npm run richmenu)
 └── src/
     ├── app/
     │   ├── layout.tsx           ครอบทุกหน้าด้วย SessionProvider (LIFF login)
@@ -28,7 +29,7 @@ Next.js (App Router) + TypeScript + Tailwind CSS · Firebase Firestore/Storage (
     │   ├── student/page.tsx         ⏳ 4.5 ฟีดการบ้าน + Leaderboard
     │   └── api/
     │       ├── me/route.ts                      ตัวตน + ห้องของผู้ใช้
-    │       ├── line/webhook/route.ts            ⏳ 4.1
+    │       ├── line/webhook/route.ts            ตรวจ signature, follow, คำสั่ง "การบ้าน"
     │       ├── rooms/register/route.ts          ⏳ 4.2
     │       ├── rooms/join/route.ts              ⏳ 4.3
     │       ├── rooms/leave/route.ts             ⏳ 4.3
