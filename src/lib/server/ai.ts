@@ -43,7 +43,7 @@ async function generate(req: GeminiRequest): Promise<GeminiResult> {
   const call = () =>
     fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": requireEnv("AQ.Ab8RN6JVNFXnahXKmHvy6XZsyOp9JjSR1o79kMSgJ3_jxsuBOA") },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": requireEnv("GEMINI_API_KEY") },
       body,
       signal: AbortSignal.timeout(req.timeout_ms),
       cache: "no-store",
